@@ -1,0 +1,5 @@
+version: "0.0.1"
+description: "Telegram API Client for ESP-IDF"
+license: "MIT"
+maintainers:
+  - Jakob Rühlow <jakob@ruehlow.de>

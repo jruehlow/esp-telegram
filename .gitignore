@@ -1,0 +1,5 @@
+/cert
+sdkconfig.old
+sdkconfig
+
+compile_commands.json

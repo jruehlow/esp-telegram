@@ -1,0 +1,23 @@
+menu "Telegram Bot Configuration"
+
+    config TELEGRAM_BOT_TOKEN
+        string "Telegram Bot Token"
+        default ""
+        help
+            Enter your Telegram Bot Token here.
+
+    config TELEGRAM_API_TIMEOUT_MS
+        int "API Timeout (ms)"
+        default 5000
+        range 1000 60000
+        help
+            Timeout for API requests in milliseconds.
+
+    config TELEGRAM_API_BUFFER_SIZE
+        int "API Buffer Size"
+        default 4096
+        range 1024 16384
+        help
+            Size of the buffer for API responses in bytes.
+
+endmenu
