@@ -1,20 +1,31 @@
 #ifndef TELEGRAM_API_H
 #define TELEGRAM_API_H
 
-#include <esp_http_client.h>
+#include "esp_http_client.h"
+#include <stddef.h>
 
-typedef struct telegram_handle_t telegram_handle_t;
+typedef struct tg_handle_t tg_handle_t;
 
 typedef struct {
-    int code;
-    char* data;
-    size_t data_len;
-} telegram_api_response_t;
+    const char* url;
+    esp_http_client_method_t method;
+    const char** headers;
+    size_t num_headers;
+    const char* body;
+} tg_api_request_t;
 
-telegram_handle_t* telegram_init(void);
-esp_err_t telegram_get(telegram_handle_t* handle, const char* endpoint, telegram_api_response_t** out_response);
-esp_err_t telegram_post(telegram_handle_t* handle, const char* endpoint, const char* payload, telegram_api_response_t** out_response);
-void telegram_free_response(telegram_api_response_t* response);
-void telegram_deinit(telegram_handle_t* handle);
+typedef struct {
+    int status_code;
+    char* body;
+    size_t body_length;
+} tg_api_response_t;
+
+tg_handle_t* tg_init(void);
+void tg_deinit(tg_handle_t* handle);
+
+tg_api_response_t* tg_make_http_request(tg_handle_t* handle, const tg_api_request_t* params);
+void tg_free_http_response(tg_api_response_t* response);
+
+tg_api_response_t* tg_api_request(tg_handle_t* handle, const char* bot_token, const char* method, const char* params_json);
 
 #endif // TELEGRAM_API_H

@@ -1,95 +1,141 @@
 #include "telegram/_api.h"
-#include "telegram.h"
-
 #include "sdkconfig.h"
 #include "esp_crt_bundle.h"
 #include "esp_tls.h"
-#include "esp_log.h"
-
 #include <string.h>
 #include <stdlib.h>
 
+#define TELEGRAM_API_URL "https://api.telegram.org/bot"
 
-struct telegram_handle_t {
+struct tg_handle_t {
     esp_http_client_handle_t http;
     char* buffer;
     size_t buffer_size;
+    size_t buffer_capacity;
 };
 
 static esp_err_t http_event_handler(esp_http_client_event_t *evt) {
-    telegram_handle_t* handle = (telegram_handle_t*)evt->user_data;
+    tg_handle_t* handle = (tg_handle_t*)evt->user_data;
     
-    if (evt->event_id == HTTP_EVENT_ON_DATA) {
-        if (handle->buffer_size + evt->data_len < CONFIG_TELEGRAM_API_BUFFER_SIZE) {
+    switch (evt->event_id) {
+        case HTTP_EVENT_ON_DATA:
+            if (handle->buffer_size + evt->data_len > handle->buffer_capacity) {
+                size_t new_capacity = handle->buffer_capacity * 2;
+                if (new_capacity < handle->buffer_size + evt->data_len) {
+                    new_capacity = handle->buffer_size + evt->data_len;
+                }
+                char* new_buffer = realloc(handle->buffer, new_capacity);
+                if (new_buffer == NULL) {
+                    return ESP_ERR_NO_MEM;
+                }
+                handle->buffer = new_buffer;
+                handle->buffer_capacity = new_capacity;
+            }
             memcpy(handle->buffer + handle->buffer_size, evt->data, evt->data_len);
             handle->buffer_size += evt->data_len;
-        }
+            break;
+        default:
+            break;
     }
     return ESP_OK;
 }
 
-telegram_handle_t* telegram_init(void) {
-    telegram_handle_t* handle = calloc(1, sizeof(telegram_handle_t));
-    handle->buffer = malloc(CONFIG_TELEGRAM_API_BUFFER_SIZE);
+tg_handle_t* tg_init(void) {
+    tg_handle_t* handle = calloc(1, sizeof(tg_handle_t));
+    if (handle == NULL) {
+        return NULL;
+    }
+    handle->buffer_capacity = CONFIG_TELEGRAM_API_BUFFER_SIZE;
+    handle->buffer = malloc(handle->buffer_capacity);
+    if (handle->buffer == NULL) {
+        free(handle);
+        return NULL;
+    }
     return handle;
 }
 
-static esp_err_t telegram_request(telegram_handle_t* handle, esp_http_client_method_t method, const char* endpoint, const char* payload, telegram_api_response_t** out_response) {
-    char url[256];
-    snprintf(url, sizeof(url), "%s%s%s", TELEGRAM_API_URL, CONFIG_TELEGRAM_BOT_TOKEN, endpoint);
+void tg_deinit(tg_handle_t* handle) {
+    if (handle) {
+        free(handle->buffer);
+        free(handle);
+    }
+}
 
+tg_api_response_t* tg_make_http_request(tg_handle_t* handle, const tg_api_request_t* params) {
     esp_http_client_config_t config = {
-        .url = url,
-        .method = method,
+        .url = params->url,
+        .method = params->method,
         .timeout_ms = CONFIG_TELEGRAM_API_TIMEOUT_MS,
         .event_handler = http_event_handler,
         .user_data = handle,
         .crt_bundle_attach = esp_crt_bundle_attach,
     };
-
+    
     handle->http = esp_http_client_init(&config);
     if (handle->http == NULL) {
-        return ESP_FAIL;
+        return NULL;
     }
-
-    if (payload) {
-        esp_http_client_set_post_field(handle->http, payload, strlen(payload));
+    
+    for (size_t i = 0; i < params->num_headers; i++) {
+        char* header = strdup(params->headers[i]);
+        char* value = strchr(header, ':');
+        if (value) {
+            *value = '\0';
+            value++;
+            while (*value == ' ') value++;
+            esp_http_client_set_header(handle->http, header, value);
+        }
+        free(header);
     }
-
-    esp_err_t err = esp_http_client_perform(handle->http);
-    if (err == ESP_OK) {
-        telegram_api_response_t* response = malloc(sizeof(telegram_api_response_t));
-        response->code = esp_http_client_get_status_code(handle->http);
-        response->data = malloc(handle->buffer_size + 1);
-        memcpy(response->data, handle->buffer, handle->buffer_size);
-        response->data[handle->buffer_size] = '\0';
-        response->data_len = handle->buffer_size;
-        *out_response = response;
+    
+    if (params->body) {
+        esp_http_client_set_post_field(handle->http, params->body, strlen(params->body));
     }
-
-    esp_http_client_cleanup(handle->http);
+    
     handle->buffer_size = 0;
-    return err;
+    esp_err_t err = esp_http_client_perform(handle->http);
+    
+    tg_api_response_t* response = NULL;
+    if (err == ESP_OK) {
+        response = malloc(sizeof(tg_api_response_t));
+        if (response) {
+            response->status_code = esp_http_client_get_status_code(handle->http);
+            response->body = malloc(handle->buffer_size + 1);
+            if (response->body) {
+                memcpy(response->body, handle->buffer, handle->buffer_size);
+                response->body[handle->buffer_size] = '\0';
+                response->body_length = handle->buffer_size;
+            } else {
+                free(response);
+                response = NULL;
+            }
+        }
+    }
+    
+    esp_http_client_cleanup(handle->http);
+    return response;
 }
 
-esp_err_t telegram_get(telegram_handle_t* handle, const char* endpoint, telegram_api_response_t** out_response) {
-    return telegram_request(handle, HTTP_METHOD_GET, endpoint, NULL, out_response);
-}
-
-esp_err_t telegram_post(telegram_handle_t* handle, const char* endpoint, const char* payload, telegram_api_response_t** out_response) {
-    return telegram_request(handle, HTTP_METHOD_POST, endpoint, payload, out_response);
-}
-
-void telegram_free_response(telegram_api_response_t* response) {
+void tg_free_http_response(tg_api_response_t* response) {
     if (response) {
-        free(response->data);
+        free(response->body);
         free(response);
     }
 }
 
-void telegram_deinit(telegram_handle_t* handle) {
-    if (handle) {
-        free(handle->buffer);
-        free(handle);
-    }
+tg_api_response_t* tg_api_request(tg_handle_t* handle, const char* bot_token, const char* method, const char* params_json) {
+    char url[256];
+    snprintf(url, sizeof(url), "%s%s/%s", TELEGRAM_API_URL, bot_token, method);
+    
+    const char* headers[] = {"Content-Type: application/json"};
+    
+    tg_api_request_t request_params = {
+        .url = url,
+        .method = HTTP_METHOD_POST,
+        .headers = headers,
+        .num_headers = 1,
+        .body = params_json
+    };
+    
+    return tg_make_http_request(handle, &request_params);
 }

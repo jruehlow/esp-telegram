@@ -7,35 +7,33 @@
 #include <string.h>
 #include <stdlib.h>
 
-telegram_bot_info_t* telegram_get_me(void) {
-    telegram_handle_t* handle = telegram_init();
+tg_bot_info_t* tg_get_me(void) {
+    tg_handle_t* handle = tg_init();
     if (handle == NULL) {
-        ESP_LOGE(TELEGRAM_LOG_TAG, "Failed to initialize Telegram handle");
+        ESP_LOGE(TELEGRAM_LOG_TAG, "Failed to initialize tg handle");
         return NULL;
     }
 
-    telegram_api_response_t* response = NULL;
-    esp_err_t err = telegram_get(handle, "/getMe", &response);
-
-    if (err != ESP_OK) {
-        ESP_LOGE(TELEGRAM_LOG_TAG, "Failed to get bot info: %s", esp_err_to_name(err));
-        telegram_deinit(handle);
+    tg_api_response_t* response = tg_api_request(handle, CONFIG_TELEGRAM_BOT_TOKEN, "getMe", NULL);
+    if (response == NULL) {
+        ESP_LOGE(TELEGRAM_LOG_TAG, "Failed to get bot info");
+        tg_deinit(handle);
         return NULL;
     }
 
-    if (response->code != 200) {
-        ESP_LOGE(TELEGRAM_LOG_TAG, "API request failed with code %d: %s", response->code, response->data);
-        telegram_free_response(response);
-        telegram_deinit(handle);
+    if (response->status_code != 200) {
+        ESP_LOGE(TELEGRAM_LOG_TAG, "API request failed with code %d: %s", response->status_code, response->body);
+        tg_free_http_response(response);
+        tg_deinit(handle);
         return NULL;
     }
 
     // Parse JSON response
-    cJSON *root = cJSON_Parse(response->data);
+    cJSON *root = cJSON_Parse(response->body);
     if (root == NULL) {
         ESP_LOGE(TELEGRAM_LOG_TAG, "Failed to parse JSON response");
-        telegram_free_response(response);
-        telegram_deinit(handle);
+        tg_free_http_response(response);
+        tg_deinit(handle);
         return NULL;
     }
 
@@ -43,17 +41,17 @@ telegram_bot_info_t* telegram_get_me(void) {
     if (result == NULL) {
         ESP_LOGE(TELEGRAM_LOG_TAG, "No 'result' field in JSON response");
         cJSON_Delete(root);
-        telegram_free_response(response);
-        telegram_deinit(handle);
+        tg_free_http_response(response);
+        tg_deinit(handle);
         return NULL;
     }
 
-    telegram_bot_info_t* bot_info = calloc(1, sizeof(telegram_bot_info_t));
+    tg_bot_info_t* bot_info = calloc(1, sizeof(tg_bot_info_t));
     if (bot_info == NULL) {
         ESP_LOGE(TELEGRAM_LOG_TAG, "Failed to allocate memory for bot info");
         cJSON_Delete(root);
-        telegram_free_response(response);
-        telegram_deinit(handle);
+        tg_free_http_response(response);
+        tg_deinit(handle);
         return NULL;
     }
 
@@ -74,13 +72,12 @@ telegram_bot_info_t* telegram_get_me(void) {
     if (supports_inline_queries && cJSON_IsBool(supports_inline_queries)) bot_info->supports_inline_queries = cJSON_IsTrue(supports_inline_queries);
 
     cJSON_Delete(root);
-    telegram_free_response(response);
-    telegram_deinit(handle);
-
+    tg_free_http_response(response);
+    tg_deinit(handle);
     return bot_info;
 }
 
-void telegram_free_bot_info(telegram_bot_info_t* bot_info) {
+void tg_free_bot_info(tg_bot_info_t* bot_info) {
     if (bot_info) {
         free(bot_info->first_name);
         free(bot_info->username);
