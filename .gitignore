@@ -1,4 +1,5 @@
 /cert
+.cache/
 sdkconfig.old
 sdkconfig
 
