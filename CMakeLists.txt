@@ -14,6 +14,7 @@ endif()
 
 idf_component_register(
     SRCS src/telegram/getMe.c
+         src/telegram/sendMessage.c
          src/telegram/helper/_api.c
          src/telegram/types/message.c
     INCLUDE_DIRS include
