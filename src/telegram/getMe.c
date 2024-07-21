@@ -1,4 +1,4 @@
-#include "telegram/_api.h"
+#include "telegram/helper/_api.h"
 #include "telegram/getMe.h"
 #include "telegram.h"
 
@@ -14,7 +14,7 @@ tg_bot_info_t* tg_get_me(void) {
         return NULL;
     }
 
-    tg_api_response_t* response = tg_api_request(handle, CONFIG_TELEGRAM_BOT_TOKEN, "getMe", NULL);
+    tg_api_response_t* response = tg_api_request(handle, "getMe", NULL);
     if (response == NULL) {
         ESP_LOGE(TELEGRAM_LOG_TAG, "Failed to get bot info");
         tg_deinit(handle);

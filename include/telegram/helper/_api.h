@@ -26,6 +26,6 @@ void tg_deinit(tg_handle_t* handle);
 tg_api_response_t* tg_make_http_request(tg_handle_t* handle, const tg_api_request_t* params);
 void tg_free_http_response(tg_api_response_t* response);
 
-tg_api_response_t* tg_api_request(tg_handle_t* handle, const char* bot_token, const char* method, const char* params_json);
+tg_api_response_t* tg_api_request(tg_handle_t* handle, const char* method, const char* body_json);
 
 #endif // TELEGRAM_API_H

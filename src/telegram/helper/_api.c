@@ -1,4 +1,5 @@
-#include "telegram/_api.h"
+#include "telegram/helper/_api.h"
+
 #include "sdkconfig.h"
 #include "esp_crt_bundle.h"
 #include "esp_tls.h"
@@ -123,9 +124,9 @@ void tg_free_http_response(tg_api_response_t* response) {
     }
 }
 
-tg_api_response_t* tg_api_request(tg_handle_t* handle, const char* bot_token, const char* method, const char* params_json) {
+tg_api_response_t* tg_api_request(tg_handle_t* handle, const char* method, const char* body_json) {
     char url[256];
-    snprintf(url, sizeof(url), "%s%s/%s", TELEGRAM_API_URL, bot_token, method);
+    snprintf(url, sizeof(url), "%s%s/%s", TELEGRAM_API_URL, CONFIG_TELEGRAM_BOT_TOKEN, method);
     
     const char* headers[] = {"Content-Type: application/json"};
     
@@ -134,7 +135,7 @@ tg_api_response_t* tg_api_request(tg_handle_t* handle, const char* bot_token, co
         .method = HTTP_METHOD_POST,
         .headers = headers,
         .num_headers = 1,
-        .body = params_json
+        .body = body_json
     };
     
     return tg_make_http_request(handle, &request_params);
